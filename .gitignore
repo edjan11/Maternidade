@@ -1,0 +1,7 @@
+node_modules/
+data/
+chrome-data/
+logs/
+*.log
+.env
+.DS_Store
