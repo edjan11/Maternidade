@@ -4,9 +4,13 @@ Monitor automático de solicitações pendentes no sistema de maternidade do TJS
 
 ## 🚀 Instalação
 
+⚠️ **Importante:** Não funciona em pastas de rede (`\\Servidor\...`). Copie para uma pasta local primeiro!
+
 ```bash
 npm install
 ```
+
+❌ **Erro "caminho UNC"?** Veja: **[ERRO-CAMINHO-REDE.md](ERRO-CAMINHO-REDE.md)**
 
 ## ▶️ Executar
 
