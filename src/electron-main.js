@@ -398,63 +398,79 @@ async function tryAutoLogin() {
             }
 
             // Se chegou no portal = login OK!
-            if ((url.includes('portalExterno') || url.includes('portal') || url.includes('sistemasTJSE')) && !url.includes('login') && !registroCivilClicked) {
-                console.log('✅ Login OK! Clicando em Registro Civil...');
+            if ((url.includes('portalExterno') || url.includes('portal') || url.includes('sistemasTJSE')) && !url.includes('login')) {
+                if (registroCivilClicked) {
+                    console.log('⏭️ [DEBUG] Já clicou em Registro Civil, ignorando...');
+                    return; // JÁ CLICOU, IGNORA
+                }
+                
+                console.log('✅ [DEBUG] Portal/Sistemas! Procurando botão Registro Civil...');
                 isLoggedIn = true;
-                registroCivilClicked = true; // Marca que já clicou
+                registroCivilClicked = true; // Marca ANTES de clicar
                 await new Promise(r => setTimeout(r, 2000));
                 
-                // Clica no botão Registro Civil - busca pelo texto no h2
-                await win.webContents.executeJavaScript(`
+                // Clica no botão Registro Civil
+                const clickResult = await win.webContents.executeJavaScript(`
                     (function() {
                         const allLinks = document.querySelectorAll('a[id*="clAcessar"]');
                         for (let link of allLinks) {
                             const h2 = link.querySelector('h2');
                             if (h2 && h2.textContent.trim() === 'Registro Civil') {
+                                console.log('    Clicou em Registro Civil (id: ' + link.id + ')');
                                 link.click();
-                                return;
+                                return true;
                             }
                         }
+                        return false;
                     })();
                 `);
                 
+                if (!clickResult) {
+                    console.log('❌ [DEBUG] Botão Registro Civil não encontrado!');
+                    return;
+                }
+                
                 // Aguarda o modal aparecer
-                console.log('⏳ Aguardando modal de seleção...');
+                console.log('⏳ [DEBUG] Aguardando modal (3s)...');
                 await new Promise(r => setTimeout(r, 3000));
                 
-                // Verifica se apareceu o modal de seleção de cartório
+                // Verifica se apareceu o modal
                 const hasModal = await win.webContents.executeJavaScript(`
                     (function() {
-                        const dialog = document.querySelector('.ui-dialog');
-                        const titleSpan = dialog ? dialog.querySelector('.ui-dialog-title') : null;
-                        return titleSpan && titleSpan.textContent.includes('Selecionar Competência/Setor');
+                        const titleSpan = document.querySelector('span#j_idt56_title');
+                        if (titleSpan) {
+                            console.log('    Modal encontrado: ' + titleSpan.textContent);
+                            return titleSpan.textContent.includes('Selecionar Competência');
+                        }
+                        console.log('    Modal NÃO encontrado');
+                        return false;
                     })();
                 `);
                 
                 if (hasModal) {
-                    console.log('🏢 Modal detectado! Selecionando cartório...');
+                    console.log('🏢 [DEBUG] Modal detectado! Selecionando cartório...');
                     
-                    // Clica no dropdown
+                    // Clica no dropdown usando o ID correto
                     await win.webContents.executeJavaScript(`
                         (function() {
-                            const label = document.querySelector('label[id*="cbSetor_label"]');
-                            if (label) label.click();
+                            const dropdown = document.querySelector('#formSetor\\\\:cbSetor');
+                            if (dropdown) {
+                                dropdown.click();
+                                console.log('    Dropdown clicado');
+                            }
                         })();
                     `);
                     
-                    await new Promise(r => setTimeout(r, 1000));
+                    await new Promise(r => setTimeout(r, 1500));
                     
-                    // Seleciona o cartório
+                    // Seleciona o 9º Ofício pelo value
                     await win.webContents.executeJavaScript(`
                         (function() {
-                            const items = document.querySelectorAll('.ui-selectonemenu-item');
-                            for (const item of items) {
-                                const dataLabel = item.getAttribute('data-label');
-                                if (dataLabel && dataLabel.includes('9º Ofício da Comarca de Aracaju')) {
-                                    item.click();
-                                    console.log('✅ Cartório selecionado');
-                                    return;
-                                }
+                            const select = document.querySelector('select#formSetor\\\\:cbSetor_input');
+                            if (select) {
+                                select.value = '9646';
+                                select.dispatchEvent(new Event('change', { bubbles: true }));
+                                console.log('    Cartório 9º Ofício selecionado (value=9646)');
                             }
                         })();
                     `);
@@ -462,26 +478,24 @@ async function tryAutoLogin() {
                     await new Promise(r => setTimeout(r, 1000));
                     
                     // Clica em Entrar
-                    console.log('✅ Clicando em Entrar do modal...');
+                    console.log('✅ [DEBUG] Clicando em Entrar...');
                     await win.webContents.executeJavaScript(`
                         (function() {
-                            const buttons = document.querySelectorAll('button');
-                            for (const btn of buttons) {
-                                const spanText = btn.querySelector('.ui-button-text');
-                                if (spanText && spanText.textContent.trim() === 'Entrar') {
-                                    btn.click();
-                                    console.log('✅ Botão Entrar clicado');
-                                    return;
-                                }
+                            const btn = document.querySelector('button#formSetor\\\\:sim');
+                            if (btn) {
+                                btn.click();
+                                console.log('    Botão Entrar clicado');
                             }
                         })();
                     `);
                     
                     await new Promise(r => setTimeout(r, 3000));
+                } else {
+                    console.log('ℹ️ [DEBUG] Modal não apareceu, continuando...');
                 }
                 
-                // Agora navega para o Registro Civil
-                console.log('🔄 Navegando para Registro Civil...');
+                // Navega para Registro Civil
+                console.log('🔄 [DEBUG] Navegando para Registro Civil...');
                 win.loadURL('https://www.tjse.jus.br/registrocivil/seguro/principal.tjse');
                 return;
             }
