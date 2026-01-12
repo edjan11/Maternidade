@@ -10,15 +10,26 @@ npm install
 
 ## ▶️ Executar
 
-**Modo invisível (background):**
+**Opção 1 - Simples (recomendado):**
+```bash
+INICIAR.bat
+```
+
+**Opção 2 - Invisível:**
 ```bash
 wscript iniciar-invisivel.vbs
 ```
 
-**Modo visível (com terminal):**
+**Opção 3 - Com terminal:**
 ```bash
 npm start
 ```
+
+## 🛡️ Antivírus Bloqueando?
+
+Se o app não iniciar, veja: **[ANTIVIRUS.md](ANTIVIRUS.md)**
+
+**Resumo:** Adicione a pasta `maternidade-tjse` nas exceções do antivírus.
 
 ## ⚙️ Configuração
 
