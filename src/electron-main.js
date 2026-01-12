@@ -309,6 +309,7 @@ async function tryAutoLogin() {
 
         let resolved = false;
         let loginAttempted = false;
+        let registroCivilClicked = false;
         
         const done = (success) => {
             if (!resolved) {
@@ -397,9 +398,10 @@ async function tryAutoLogin() {
             }
 
             // Se chegou no portal = login OK!
-            if ((url.includes('portalExterno') || url.includes('portal') || url.includes('sistemasTJSE')) && !url.includes('login')) {
+            if ((url.includes('portalExterno') || url.includes('portal') || url.includes('sistemasTJSE')) && !url.includes('login') && !registroCivilClicked) {
                 console.log('✅ Login OK! Clicando em Registro Civil...');
                 isLoggedIn = true;
+                registroCivilClicked = true; // Marca que já clicou
                 await new Promise(r => setTimeout(r, 2000));
                 
                 // Clica no botão Registro Civil - busca pelo texto no h2
