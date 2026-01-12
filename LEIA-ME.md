@@ -11,22 +11,26 @@ Monitor automático de solicitações pendentes no sistema de maternidade do TJS
 
 ## 🚀 Primeiro Uso
 
-1. Clique no atalho **"Monitor Maternidade TJSE"** no Menu Iniciar
-2. Clique no ícone vermelho na bandeja
-3. Selecione **"⚙️ edjan.santos"** (ou "Configurar Login")
-4. Digite seu **login** e **senha** do TJSE
-5. Clique em **"Salvar"**
-6. Clique em **"👁️ Ver Login (debug)"** para testar
-7. Aguarde o login completar
-8. Pronto! O monitor está ativo
+1. Clique no atalho **"Monitor Maternidade TJSE"** no Menu Iniciar (ou Área de Trabalho)
+2. **O aplicativo inicia invisível** (sem janela de terminal)
+3. Procure o **ícone vermelho** na bandeja do sistema (canto inferior direito)
+4. Clique com botão direito no ícone
+5. Selecione **"⚙️ edjan.santos"** (ou "Configurar Login")
+6. Digite seu **login** e **senha** do TJSE
+7. Clique em **"Salvar"**
+8. Clique no ícone novamente e selecione **"👁️ Ver Login (debug)"** para testar
+9. Aguarde o login completar
+10. Pronto! O monitor está ativo rodando em **background**
 
 ## ⚙️ Como Funciona
 
+- **Roda em background** (não precisa manter terminal aberto)
 - **Verifica automaticamente** a cada 5 minutos
 - **Ícone verde** = Nenhuma solicitação pendente
 - **Ícone amarelo** = Novas solicitações SOLICITADO encontradas
 - **Ícone vermelho** = Sessão expirada, faça login
 - **Auto-login** durante horário de trabalho (8:05-17:10)
+- **Invisível**: apenas o ícone na bandeja é visível
 
 ## 🔧 Opções do Menu
 
@@ -40,7 +44,8 @@ Monitor automático de solicitações pendentes no sistema de maternidade do TJS
 ## 📁 Arquivos Importantes
 
 - `INSTALAR-APP.bat` - Instalador com atalhos
-- `iniciar-maternidade.bat` - Inicia o monitor
+- `iniciar-invisivel.vbs` - Inicia o monitor em background (sem janela)
+- `iniciar-maternidade.bat` - Alternativa com janela visível
 - `credentials.enc` - Credenciais criptografadas (criado após configurar)
 - `src/electron-main.js` - Código principal
 

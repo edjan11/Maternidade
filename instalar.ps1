@@ -4,7 +4,7 @@
 $ErrorActionPreference = "Stop"
 $currentPath = $PSScriptRoot
 $appName = "Monitor Maternidade TJSE"
-$exeName = "iniciar-maternidade.bat"
+$exeName = "iniciar-invisivel.vbs"
 $iconPath = Join-Path $currentPath "icons\maternidade-ok.ico"
 
 Write-Host ""

@@ -6,12 +6,36 @@
   "main": "src/electron-main.js",
   "scripts": {
     "start": "electron .",
-    "open-tjse": "node src/simple-start.js"
+    "open-tjse": "node src/simple-start.js",
+    "build": "electron-builder --win --x64",
+    "dist": "electron-builder"
+  },
+  "build": {
+    "appId": "com.tjse.monitor.maternidade",
+    "productName": "Monitor TJSE Maternidade",
+    "win": {
+      "target": ["portable"],
+      "icon": "icons/maternidade-ok.ico"
+    },
+    "portable": {
+      "artifactName": "MonitorTJSE-Maternidade-Portable.exe"
+    },
+    "files": [
+      "src/**/*",
+      "icons/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist"
+    }
   },
   "dependencies": {
-    "electron": "^28.0.0",
     "puppeteer-core": "^21.11.0"
   },
   "author": "",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^26.4.0"
+  }
 }

@@ -4,4 +4,6 @@ chrome-data/
 logs/
 *.log
 .env
+credentials.enc
+dist/
 .DS_Store
