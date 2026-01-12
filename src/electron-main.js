@@ -400,103 +400,89 @@ async function tryAutoLogin() {
             // Se chegou no portal = login OK!
             if ((url.includes('portalExterno') || url.includes('portal') || url.includes('sistemasTJSE')) && !url.includes('login')) {
                 if (registroCivilClicked) {
-                    console.log('⏭️ [DEBUG] Já clicou em Registro Civil, ignorando...');
-                    return; // JÁ CLICOU, IGNORA
+                    console.log('⏭️ [DEBUG] Já clicou em Registro Civil, aguardando navegação...');
+                    return;
                 }
                 
-                console.log('✅ [DEBUG] Portal/Sistemas! Procurando botão Registro Civil...');
+                registroCivilClicked = true;
                 isLoggedIn = true;
-                registroCivilClicked = true; // Marca ANTES de clicar
+                
+                console.log('✅ [DEBUG] Portal/Sistemas! Clicando em Registro Civil...');
                 await new Promise(r => setTimeout(r, 2000));
                 
                 // Clica no botão Registro Civil
-                const clickResult = await win.webContents.executeJavaScript(`
+                await win.webContents.executeJavaScript(`
                     (function() {
                         const allLinks = document.querySelectorAll('a[id*="clAcessar"]');
                         for (let link of allLinks) {
                             const h2 = link.querySelector('h2');
                             if (h2 && h2.textContent.trim() === 'Registro Civil') {
-                                console.log('    Clicou em Registro Civil (id: ' + link.id + ')');
                                 link.click();
-                                return true;
+                                return;
                             }
                         }
-                        return false;
                     })();
                 `);
                 
-                if (!clickResult) {
-                    console.log('❌ [DEBUG] Botão Registro Civil não encontrado!');
-                    return;
-                }
+                // Aguarda o modal aparecer (5 segundos)
+                console.log('⏳ [DEBUG] Aguardando modal (5s)...');
+                await new Promise(r => setTimeout(r, 5000));
                 
-                // Aguarda o modal aparecer
-                console.log('⏳ [DEBUG] Aguardando modal (3s)...');
-                await new Promise(r => setTimeout(r, 3000));
-                
-                // Verifica se apareceu o modal
-                const hasModal = await win.webContents.executeJavaScript(`
+                // Verifica e abre dropdown
+                const resultado = await win.webContents.executeJavaScript(`
                     (function() {
-                        const titleSpan = document.querySelector('span#j_idt56_title');
-                        if (titleSpan) {
-                            console.log('    Modal encontrado: ' + titleSpan.textContent);
-                            return titleSpan.textContent.includes('Selecionar Competência');
+                        const dialog = document.querySelector('.ui-dialog[aria-hidden="false"]');
+                        const title = dialog ? dialog.querySelector('.ui-dialog-title') : null;
+                        if (!title || !title.textContent.includes('Selecionar')) {
+                            return 'Modal não encontrado';
                         }
-                        console.log('    Modal NÃO encontrado');
-                        return false;
+                        const dropdownLabel = document.querySelector('#formSetor\\\\:cbSetor_label');
+                        if (dropdownLabel) dropdownLabel.click();
+                        return 'Modal encontrado, abrindo dropdown...';
                     })();
                 `);
+                console.log('   ', resultado);
                 
-                if (hasModal) {
-                    console.log('🏢 [DEBUG] Modal detectado! Selecionando cartório...');
-                    
-                    // Clica no dropdown usando o ID correto
-                    await win.webContents.executeJavaScript(`
-                        (function() {
-                            const dropdown = document.querySelector('#formSetor\\\\:cbSetor');
-                            if (dropdown) {
-                                dropdown.click();
-                                console.log('    Dropdown clicado');
-                            }
-                        })();
-                    `);
+                if (resultado.includes('Modal encontrado')) {
+                    console.log('🏢 [DEBUG] Modal detectado! Selecionando cartório via JS...');
                     
                     await new Promise(r => setTimeout(r, 1500));
                     
-                    // Seleciona o 9º Ofício pelo value
-                    await win.webContents.executeJavaScript(`
+                    // Seleciona o item
+                    const selecao = await win.webContents.executeJavaScript(`
                         (function() {
-                            const select = document.querySelector('select#formSetor\\\\:cbSetor_input');
-                            if (select) {
-                                select.value = '9646';
-                                select.dispatchEvent(new Event('change', { bubbles: true }));
-                                console.log('    Cartório 9º Ofício selecionado (value=9646)');
+                            const items = document.querySelectorAll('#formSetor\\\\:cbSetor_items li');
+                            for (const item of items) {
+                                if (item.textContent.includes('9º Ofício')) {
+                                    item.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+                                    item.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+                                    item.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+                                    item.click();
+                                    return 'Selecionou: ' + item.textContent.substring(0, 50);
+                                }
                             }
+                            return 'Item 9º Ofício não encontrado';
                         })();
                     `);
+                    console.log('   ', selecao);
                     
-                    await new Promise(r => setTimeout(r, 1000));
+                    await new Promise(r => setTimeout(r, 2000));
                     
                     // Clica em Entrar
-                    console.log('✅ [DEBUG] Clicando em Entrar...');
                     await win.webContents.executeJavaScript(`
                         (function() {
-                            const btn = document.querySelector('button#formSetor\\\\:sim');
+                            const btn = document.querySelector('#formSetor\\\\:sim');
                             if (btn) {
+                                btn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+                                btn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
                                 btn.click();
-                                console.log('    Botão Entrar clicado');
                             }
                         })();
                     `);
-                    
-                    await new Promise(r => setTimeout(r, 3000));
+                    console.log('    Clicou em Entrar');
                 } else {
-                    console.log('ℹ️ [DEBUG] Modal não apareceu, continuando...');
+                    console.log('ℹ️ [DEBUG] Modal não apareceu, aguardando redirecionamento...');
                 }
-                
-                // Navega para Registro Civil
-                console.log('🔄 [DEBUG] Navegando para Registro Civil...');
-                win.loadURL('https://www.tjse.jus.br/registrocivil/seguro/principal.tjse');
                 return;
             }
 
@@ -928,6 +914,13 @@ async function tryLoginVisible() {
             }
 
             if ((url.includes('portalExterno') || url.includes('portal') || url.includes('sistemasTJSE')) && !url.includes('login')) {
+                // Evita loop - só processa uma vez
+                if (win.processouPortal) {
+                    console.log('⏭️ [DEBUG] Portal já processado, aguardando...');
+                    return;
+                }
+                win.processouPortal = true;
+                
                 console.log('✅ [DEBUG] Portal/Sistemas! Procurando botão Registro Civil...');
                 isLoggedIn = true;
                 await new Promise(r => setTimeout(r, 2000));
@@ -935,25 +928,100 @@ async function tryLoginVisible() {
                 // Clica no botão Registro Civil - busca pelo texto exato no h2
                 const clickResult = await win.webContents.executeJavaScript(`
                     (function() {
-                        // Lista todos os botões disponíveis para debug
-                        const allH2 = Array.from(document.querySelectorAll('h2')).map(h => h.textContent.trim());
-                        console.log('H2 encontrados:', allH2);
-                        
-                        // Procura h2 com texto "Registro Civil" e clica no link pai
                         const allLinks = document.querySelectorAll('a[id*="clAcessar"]');
                         for (let link of allLinks) {
                             const h2 = link.querySelector('h2');
                             if (h2 && h2.textContent.trim() === 'Registro Civil') {
-                                console.log('Encontrou link:', link.id);
                                 link.click();
                                 return 'Clicou em Registro Civil (id: ' + link.id + ')';
                             }
                         }
-                        
-                        return 'Botão Registro Civil não encontrado. H2s: ' + allH2.join(', ');
+                        return 'Botão Registro Civil não encontrado';
                     })();
                 `);
                 console.log('   ', clickResult);
+                
+                // Aguarda modal aparecer (5 segundos)
+                console.log('⏳ [DEBUG] Aguardando modal de seleção de cartório (5s)...');
+                await new Promise(r => setTimeout(r, 5000));
+                
+                // Verifica se o modal de seleção apareceu e preenche tudo via JS
+                const resultado = await win.webContents.executeJavaScript(`
+                    (function() {
+                        const dialog = document.querySelector('.ui-dialog[aria-hidden="false"]');
+                        const title = dialog ? dialog.querySelector('.ui-dialog-title') : null;
+                        if (!title || !title.textContent.includes('Selecionar')) {
+                            return 'Modal não encontrado';
+                        }
+                        
+                        // Encontra o dropdown label e clica para abrir
+                        const dropdownLabel = document.querySelector('#formSetor\\\\:cbSetor_label');
+                        if (dropdownLabel) {
+                            dropdownLabel.click();
+                        }
+                        return 'Modal encontrado, abrindo dropdown...';
+                    })();
+                `);
+                console.log('   ', resultado);
+                
+                if (resultado.includes('Modal encontrado')) {
+                    console.log('🏢 [DEBUG] Modal detectado! Selecionando cartório via JS...');
+                    
+                    // Aguarda dropdown abrir
+                    await new Promise(r => setTimeout(r, 1500));
+                    
+                    // Seleciona o item via JavaScript simulando clique real
+                    const selecao = await win.webContents.executeJavaScript(`
+                        (function() {
+                            // Procura o item na lista
+                            const items = document.querySelectorAll('#formSetor\\\\:cbSetor_items li');
+                            for (const item of items) {
+                                if (item.textContent.includes('9º Ofício')) {
+                                    // Simula eventos de mouse completos
+                                    item.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, cancelable: true }));
+                                    item.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
+                                    item.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
+                                    item.click();
+                                    return 'Selecionou: ' + item.textContent.substring(0, 50);
+                                }
+                            }
+                            
+                            // Tenta pelo ID direto
+                            const item5 = document.querySelector('#formSetor\\\\:cbSetor_5');
+                            if (item5) {
+                                item5.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+                                item5.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+                                item5.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+                                item5.click();
+                                return 'Selecionou via ID: ' + item5.textContent.substring(0, 50);
+                            }
+                            
+                            return 'Item 9º Ofício não encontrado. Items: ' + items.length;
+                        })();
+                    `);
+                    console.log('   ', selecao);
+                    
+                    // Aguarda seleção ser processada
+                    await new Promise(r => setTimeout(r, 2000));
+                    
+                    // Clica no botão Entrar
+                    console.log('✅ [DEBUG] Clicando em Entrar...');
+                    const btnResult = await win.webContents.executeJavaScript(`
+                        (function() {
+                            const btn = document.querySelector('#formSetor\\\\:sim');
+                            if (btn) {
+                                btn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+                                btn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+                                btn.click();
+                                return 'Clicou em Entrar';
+                            }
+                            return 'Botão Entrar não encontrado';
+                        })();
+                    `);
+                    console.log('   ', btnResult);
+                } else {
+                    console.log('ℹ️ [DEBUG] Modal não apareceu, navegação direta...');
+                }
                 return;
             }
 
