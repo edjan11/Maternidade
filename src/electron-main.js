@@ -415,6 +415,72 @@ async function tryAutoLogin() {
                         }
                     })();
                 `);
+                
+                // Aguarda o modal aparecer
+                console.log('⏳ Aguardando modal de seleção...');
+                await new Promise(r => setTimeout(r, 3000));
+                
+                // Verifica se apareceu o modal de seleção de cartório
+                const hasModal = await win.webContents.executeJavaScript(`
+                    (function() {
+                        const dialog = document.querySelector('.ui-dialog');
+                        const titleSpan = dialog ? dialog.querySelector('.ui-dialog-title') : null;
+                        return titleSpan && titleSpan.textContent.includes('Selecionar Competência/Setor');
+                    })();
+                `);
+                
+                if (hasModal) {
+                    console.log('🏢 Modal detectado! Selecionando cartório...');
+                    
+                    // Clica no dropdown
+                    await win.webContents.executeJavaScript(`
+                        (function() {
+                            const label = document.querySelector('label[id*="cbSetor_label"]');
+                            if (label) label.click();
+                        })();
+                    `);
+                    
+                    await new Promise(r => setTimeout(r, 1000));
+                    
+                    // Seleciona o cartório
+                    await win.webContents.executeJavaScript(`
+                        (function() {
+                            const items = document.querySelectorAll('.ui-selectonemenu-item');
+                            for (const item of items) {
+                                const dataLabel = item.getAttribute('data-label');
+                                if (dataLabel && dataLabel.includes('9º Ofício da Comarca de Aracaju')) {
+                                    item.click();
+                                    console.log('✅ Cartório selecionado');
+                                    return;
+                                }
+                            }
+                        })();
+                    `);
+                    
+                    await new Promise(r => setTimeout(r, 1000));
+                    
+                    // Clica em Entrar
+                    console.log('✅ Clicando em Entrar do modal...');
+                    await win.webContents.executeJavaScript(`
+                        (function() {
+                            const buttons = document.querySelectorAll('button');
+                            for (const btn of buttons) {
+                                const spanText = btn.querySelector('.ui-button-text');
+                                if (spanText && spanText.textContent.trim() === 'Entrar') {
+                                    btn.click();
+                                    console.log('✅ Botão Entrar clicado');
+                                    return;
+                                }
+                            }
+                        })();
+                    `);
+                    
+                    await new Promise(r => setTimeout(r, 3000));
+                }
+                
+                // Agora navega para o Registro Civil
+                console.log('🔄 Navegando para Registro Civil...');
+                win.loadURL('https://www.tjse.jus.br/registrocivil/seguro/principal.tjse');
                 return;
             }
 
