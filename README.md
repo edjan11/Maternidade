@@ -1,53 +1,45 @@
-# 🔍 Monitor Maternidade TJSE - Registro Civil RCPN
+# 🏥 Monitor TJSE Maternidade
 
-Sistema de monitoramento automático que detecta novas solicitações de maternidade no portal TJSE/RCPN e notifica você instantaneamente.
+Monitor automático de solicitações pendentes no sistema de maternidade do TJSE.
 
-## 🚀 Início Rápido
+## 🚀 Instalação
 
-**Clique duplo em:** `iniciar-windows.bat`
-
-## 📋 Recursos
-
-- ✅ **Monitoramento Automático** - Verifica status "SOLICITADO" a cada 3 minutos
-- ✅ **Ícone na Bandeja** - Verde (OK) / Amarelo (Nova!) / Vermelho (Offline)
-- ✅ **Notificações Windows** - Alerta visual e sonoro
-- ✅ **Ícone Piscante** - Chama atenção quando tem novidade
-- ✅ **Abertura Rápida** - Clique duplo abre Maternidade TJSE
-- ✅ **Inicialização Automática** - Configura para iniciar com Windows
-
-## 🎨 Significado das Cores
-
-| Ícone | Tooltip | Descrição |
-|-------|---------|-----------|
-| 🟢 Verde | "✅ Maternidade TJSE - Online - Sem novidades" | Tudo OK |
-| 🟡 Amarelo | "🔔 Maternidade TJSE - 1 NOVA SOLICITAÇÃO!" | **NOVA DETECTADA** |
-| 🔴 Vermelho | "❌ Maternidade TJSE - Offline" | Sistema indisponível |
-
-## 📁 Estrutura de Arquivos
-
-```
-monitor-maternidade-tjse/
-├── src/
-│   ├── electron-main.js          ⭐ Código principal
-│   ├── simple-start.js           Abre TJSE direto
-│   ├── config.js                 Configurações
-│   └── launchChrome.js           Lançador Chrome
-├── icons/
-│   ├── maternidade-ok.ico                    🟢 Verde
-│   ├── maternidade-nova-solicitacao.ico      🟡 Amarelo
-│   └── maternidade-offline.ico               🔴 Vermelho
-├── iniciar-windows.bat           ⭐ INICIAR AQUI
-├── INICIAR-COM-WINDOWS.md        📖 Guia configuração
-└── README.md
+```bash
+npm install
 ```
 
-## ⚙️ Configurar Inicialização Automática
+## ▶️ Executar
 
-Veja: **[INICIAR-COM-WINDOWS.md](INICIAR-COM-WINDOWS.md)**
+**Modo invisível (background):**
+```bash
+wscript iniciar-invisivel.vbs
+```
 
-**Resumo:**
-1. `Win + R` → `taskschd.msc`
-2. Criar Tarefa → "Monitor Maternidade TJSE - RCPN"
+**Modo visível (com terminal):**
+```bash
+npm start
+```
+
+## ⚙️ Configuração
+
+1. Execute o aplicativo
+2. Clique no ícone na bandeja do sistema
+3. Selecione "Configurar Login"
+4. Digite suas credenciais do TJSE
+
+## 📦 Funcionalidades
+
+- ✅ Monitoramento automático a cada 5 minutos
+- ✅ Notificações quando aparecem solicitações "SOLICITADO"
+- ✅ Auto-login durante horário de trabalho (8:05-17:10)
+- ✅ Credenciais criptografadas com AES-256-CBC
+- ✅ Roda em background (sem janela)
+
+## 📊 Ícones
+
+- 🟢 Verde = Nenhuma solicitação pendente
+- 🟡 Amarelo = Novas solicitações encontradas
+- 🔴 Vermelho = Sessão expirada
 3. Programa: `iniciar-windows.bat`
 4. Gatilho: "Na inicialização"
 
