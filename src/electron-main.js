@@ -210,7 +210,68 @@ async function checkNewRecords() {
 
             // Se está no Registro Civil, vai para consultas
             if (url.includes('/registrocivil/') && !url.includes('consultaSolicitacaoExterna') && !url.includes('acessonegado')) {
-                console.log('📍 Registro Civil, indo para consultas...');
+                console.log('📍 Registro Civil, verificando seleção de cartório...');
+                await new Promise(r => setTimeout(r, 2000));
+                
+                // Verifica se apareceu o painel de seleção de cartório
+                const needsCartorioSelection = await win.webContents.executeJavaScript(`
+                    (function() {
+                        const dialog = document.querySelector('.ui-dialog');
+                        const titleSpan = dialog ? dialog.querySelector('.ui-dialog-title') : null;
+                        
+                        if (titleSpan && titleSpan.textContent.includes('Selecionar Competência/Setor')) {
+                            return true;
+                        }
+                        return false;
+                    })();
+                `);
+                
+                if (needsCartorioSelection) {
+                    console.log('🏢 Selecionando cartório...');
+                    
+                    // Clica no dropdown
+                    await win.webContents.executeJavaScript(`
+                        (function() {
+                            const label = document.querySelector('label[id*="cbSetor_label"]');
+                            if (label) label.click();
+                        })();
+                    `);
+                    
+                    await new Promise(r => setTimeout(r, 1000));
+                    
+                    // Seleciona o cartório
+                    await win.webContents.executeJavaScript(`
+                        (function() {
+                            const items = document.querySelectorAll('.ui-selectonemenu-item');
+                            for (const item of items) {
+                                if (item.getAttribute('data-label')?.includes('9º Ofício da Comarca de Aracaju')) {
+                                    item.click();
+                                    return;
+                                }
+                            }
+                        })();
+                    `);
+                    
+                    await new Promise(r => setTimeout(r, 1000));
+                    
+                    // Clica em Entrar
+                    await win.webContents.executeJavaScript(`
+                        (function() {
+                            const buttons = document.querySelectorAll('button');
+                            for (const btn of buttons) {
+                                const spanText = btn.querySelector('.ui-button-text');
+                                if (spanText?.textContent.trim() === 'Entrar') {
+                                    btn.click();
+                                    return;
+                                }
+                            }
+                        })();
+                    `);
+                    
+                    await new Promise(r => setTimeout(r, 3000));
+                }
+                
+                console.log('📍 Indo para consultas...');
                 await new Promise(r => setTimeout(r, 1000));
                 win.loadURL(TARGET_URL);
                 return;
@@ -357,10 +418,76 @@ async function tryAutoLogin() {
                 return;
             }
 
-            // Se está no Registro Civil, clica no menu Maternidade
+            // Se está no Registro Civil, verifica se precisa selecionar cartório
             if (url.includes('/registrocivil/') && !url.includes('acessonegado') && !url.includes('login') && !url.includes('consultaSolicitacaoExterna')) {
-                console.log('✅ Registro Civil! Navegando via menu...');
+                console.log('✅ Registro Civil! Verificando seleção de cartório...');
                 await new Promise(r => setTimeout(r, 2000));
+                
+                // Verifica se apareceu o painel de seleção de cartório
+                const needsCartorioSelection = await win.webContents.executeJavaScript(`
+                    (function() {
+                        // Procura pelo painel de seleção
+                        const dialog = document.querySelector('.ui-dialog');
+                        const titleSpan = dialog ? dialog.querySelector('.ui-dialog-title') : null;
+                        
+                        if (titleSpan && titleSpan.textContent.includes('Selecionar Competência/Setor')) {
+                            return true;
+                        }
+                        return false;
+                    })();
+                `);
+                
+                if (needsCartorioSelection) {
+                    console.log('🏢 Detectado painel de seleção de cartório!');
+                    
+                    // Clica no dropdown
+                    await win.webContents.executeJavaScript(`
+                        (function() {
+                            const label = document.querySelector('label[id*="cbSetor_label"]');
+                            if (label) {
+                                label.click();
+                            }
+                        })();
+                    `);
+                    
+                    await new Promise(r => setTimeout(r, 1000));
+                    
+                    // Seleciona o cartório "9º Ofício"
+                    await win.webContents.executeJavaScript(`
+                        (function() {
+                            const items = document.querySelectorAll('.ui-selectonemenu-item');
+                            for (const item of items) {
+                                if (item.getAttribute('data-label') && 
+                                    item.getAttribute('data-label').includes('9º Ofício da Comarca de Aracaju')) {
+                                    item.click();
+                                    return;
+                                }
+                            }
+                        })();
+                    `);
+                    
+                    await new Promise(r => setTimeout(r, 1000));
+                    
+                    // Clica no botão Entrar
+                    await win.webContents.executeJavaScript(`
+                        (function() {
+                            const buttons = document.querySelectorAll('button');
+                            for (const btn of buttons) {
+                                const spanText = btn.querySelector('.ui-button-text');
+                                if (spanText && spanText.textContent.trim() === 'Entrar') {
+                                    btn.click();
+                                    return;
+                                }
+                            }
+                        })();
+                    `);
+                    
+                    console.log('✅ Cartório selecionado e confirmado!');
+                    await new Promise(r => setTimeout(r, 3000));
+                }
+                
+                // Agora continua o fluxo normal - navega para Maternidade
+                console.log('📋 Navegando para menu Maternidade...');
                 
                 // Abre dropdown Maternidade
                 await win.webContents.executeJavaScript(`
