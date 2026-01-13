@@ -8,6 +8,7 @@ const crypto = require('crypto');
 // ========================================
 const CHECK_INTERVAL_MS = 5 * 60 * 1000; // 5 minutos
 const LOGIN_RETRY_MS = 5 * 60 * 1000;    // 5 minutos
+const USER_PAUSE_DURATION_MS = 10 * 60 * 1000; // 10 minutos de pausa quando usuário está usando
 
 const TARGET_URL = 'https://www.tjse.jus.br/registrocivil/seguro/maternidade/solicitacaoExterna/consultaSolicitacaoExterna.tjse';
 const LOGIN_URL = 'https://www.tjse.jus.br/controleacesso/paginas/loginTJSE.tjse';
@@ -28,6 +29,7 @@ let loginRetryTimeout = null;
 let isLoggedIn = false;
 let lastCount = 0;
 let loginComplete = false; // flag para desativar automação após login
+let lastUserInteraction = 0; // timestamp da última interação do usuário (quando focou na janela)
 
 // ========================================
 // CRIPTOGRAFIA
@@ -363,6 +365,16 @@ async function tryAutoLogin() {
             mainWindow.hide();
         });
 
+        // 🎯 DETECTA QUANDO USUÁRIO CLICA/FOCA NA JANELA
+        mainWindow.on('focus', () => {
+            lastUserInteraction = Date.now();
+            console.log('🎯 Janela ganhou foco — iniciando pausa de 10 minutos');
+        });
+
+        mainWindow.on('blur', () => {
+            console.log('👁️ Janela perdeu foco — verificações podem continuar');
+        });
+
         mainWindow.webContents.on('did-finish-load', async () => {
             try {
                 if (!mainWindow || mainWindow.isDestroyed()) return;
@@ -646,11 +658,18 @@ async function tryAutoLogin() {
 // LOOP PRINCIPAL
 // ========================================
 async function mainLoop() {
-    // Se janela visível E login completo, não precisa verificar (usuário usando)
-    // Mas ainda assim atualiza ícone se já está logado
-    if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible() && loginComplete) {
-        console.log('⏸️ Janela visível — usuário usando, mantendo ícone verde.');
-        updateTrayIcon('ok', '✅ Logado - Usando agora');
+    // 🛑 PROTEÇÃO INTELIGENTE:
+    // - Se janela está em FOCO (usuário clicando/usando) E última interação foi há menos de 10min → PAUSA
+    // - Se janela está visível mas em segundo plano → CONTINUA verificando
+    // - Se janela fechada → CONTINUA verificando
+    const now = Date.now();
+    const timeSinceLastInteraction = now - lastUserInteraction;
+    
+    if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isFocused() && 
+        timeSinceLastInteraction < USER_PAUSE_DURATION_MS && loginComplete) {
+        const minutesRemaining = Math.ceil((USER_PAUSE_DURATION_MS - timeSinceLastInteraction) / 60000);
+        console.log(`⏸️ Janela em FOCO — pausando verificações por mais ${minutesRemaining} minuto(s)`);
+        updateTrayIcon('ok', `✅ Logado - Em uso (pausa: ${minutesRemaining}min)`);
         return;
     }
     
@@ -698,9 +717,12 @@ function scheduleAutoLoginRetry() {
         loginRetryTimeout = null;
         
         if (!isLoggedIn && isWorkHours()) {
-            // 🛑 PROTEÇÃO: Se janela visível, NÃO tenta relogar de jeito nenhum
-            if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
-                console.log('⏸️ Janela visível — usuário usando, cancelando login.');
+            // 🛑 PROTEÇÃO: Se janela em foco E última interação recente, NÃO tenta relogar
+            const now = Date.now();
+            const timeSinceLastInteraction = now - lastUserInteraction;
+            if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isFocused() && 
+                timeSinceLastInteraction < USER_PAUSE_DURATION_MS) {
+                console.log('⏸️ Janela em foco com interação recente — cancelando login.');
                 return; // NÃO reagenda, espera próximo mainLoop
             }
 
@@ -744,6 +766,9 @@ function createTrayMenu() {
         {
             label: '👁️ Abrir Maternidade (já logado)',
             click: () => {
+                // 🎯 Marca timestamp de interação do usuário
+                lastUserInteraction = Date.now();
+                
                 const win = new BrowserWindow({
                     width: 1200,
                     height: 800,
@@ -889,6 +914,9 @@ app.whenReady().then(() => {
 
     // Duplo clique revela janela já logada
     tray.on('double-click', () => {
+        // 🎯 Marca timestamp de interação do usuário
+        lastUserInteraction = Date.now();
+        
         if (mainWindow && !mainWindow.isDestroyed()) {
             const url = mainWindow.webContents.getURL();
             if (!url || url === 'about:blank' || url.includes('acessonegado')) {
