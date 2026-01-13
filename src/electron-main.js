@@ -27,6 +27,7 @@ let checkInterval = null;
 let loginRetryTimeout = null;
 let isLoggedIn = false;
 let lastCount = 0;
+let loginComplete = false; // flag para desativar automação após login
 
 // ========================================
 // CRIPTOGRAFIA
@@ -67,6 +68,19 @@ function loadCredentials() {
         }
     } catch { }
     return null;
+}
+
+// Safe execute on a BrowserWindow's webContents
+async function safeExec(browserWin, code) {
+    try {
+        if (!browserWin) return null;
+        if (typeof browserWin.isDestroyed === 'function' && browserWin.isDestroyed()) return null;
+        if (!browserWin.webContents) return null;
+        return await browserWin.webContents.executeJavaScript(code);
+    } catch (err) {
+        console.log('❌ safeExec error:', err.message);
+        return null;
+    }
 }
 
 // ========================================
@@ -296,34 +310,54 @@ async function tryAutoLogin() {
     console.log('🔐 Iniciando login em background...');
 
     return new Promise((resolve) => {
-        const win = new BrowserWindow({
+        // 🛑 PROTEÇÃO FORTE: Se a janela principal está visível, NÃO FAZ NADA
+        if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
+            console.log('⏸️ Janela visível — usuário usando, login cancelado.');
+            resolve(true); // retorna true para não agendar retry
+            return;
+        }
+        
+        // 🛑 PROTEÇÃO: Se login já foi completado e janela existe, não refaz
+        if (loginComplete && mainWindow && !mainWindow.isDestroyed()) {
+            console.log('⏸️ Login já completo, não refazendo.');
+            resolve(true);
+            return;
+        }
+        
+        // Se já existe mainWindow oculta e logada, apenas retorna sucesso
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            resolve(true);
+            return;
+        }
+        
+        mainWindow = new BrowserWindow({
             width: 1200,
             height: 800,
-            show: false, // INVISÍVEL!
+            show: true, // VISÍVEL para login funcionar corretamente
             webPreferences: {
                 partition: 'persist:tjse-monitor',
                 nodeIntegration: false,
                 contextIsolation: true
             }
         });
-
         let resolved = false;
         let loginAttempted = false;
         let registroCivilClicked = false;
-        
+
         const done = (success) => {
             if (!resolved) {
                 resolved = true;
-                if (!win.isDestroyed()) win.destroy();
+                // Apenas oculta, não destrói a janela
+                if (mainWindow && !mainWindow.isDestroyed()) mainWindow.hide();
                 resolve(success);
             }
         };
 
         // Intercepta popups e navega na mesma janela
-        win.webContents.setWindowOpenHandler(({ url }) => {
+        mainWindow.webContents.setWindowOpenHandler(({ url }) => {
             console.log('🔗 Popup interceptado:', url);
             if (!url.includes('blank.tjse')) {
-                win.loadURL(url);
+                mainWindow.loadURL(url);
             }
             return { action: 'deny' };
         });
@@ -334,34 +368,46 @@ async function tryAutoLogin() {
             done(false);
         }, 60000);
 
-        win.webContents.on('did-finish-load', async () => {
-            const url = win.webContents.getURL();
-            
-            // Ignora blank.tjse
-            if (url.includes('blank.tjse')) return;
-            
-            console.log('📄 Login:', url);
 
-            // Se chegou na página de login
-            if (url.includes('loginTJSE') && !loginAttempted) {
-                loginAttempted = true;
-                await new Promise(r => setTimeout(r, 1500));
+        // Oculta ao fechar
+        mainWindow.on('close', (e) => {
+            e.preventDefault();
+            mainWindow.hide();
+        });
 
-                try {
-                    // 1. Clica no botão "Login e senha"
+        mainWindow.webContents.on('did-finish-load', async () => {
+            try {
+                if (!mainWindow || mainWindow.isDestroyed()) return;
+                
+                // 🛑 SE O LOGIN JÁ FOI COMPLETADO, NÃO FAZ MAIS NADA!
+                // Isso permite ao usuário navegar livremente sem interferência
+                if (loginComplete) {
+                    console.log('⏭️ Login já completo — navegação livre do usuário.');
+                    return;
+                }
+                
+                const url = mainWindow.webContents.getURL();
+                if (url.includes('blank.tjse')) return;
+                console.log('📄 Login:', url);
+
+
+                // Se chegou na página de login
+                if (url.includes('loginTJSE') && !loginAttempted) {
+                    loginAttempted = true;
+                    await new Promise(r => setTimeout(r, 1500));
+                    try {
+                        // 1. Clica no botão "Login e senha"
                     console.log('📝 Clicando em "Login e senha"...');
-                    await win.webContents.executeJavaScript(`
+                    await mainWindow.webContents.executeJavaScript(`
                         (function() {
-                            const btn = document.querySelector('img[alt="Entrar com login e senha"]');
+                            const btn = document.querySelector('img[alt=\"Entrar com login e senha\"]');
                             if (btn) btn.click();
                         })();
                     `);
-                    
                     await new Promise(r => setTimeout(r, 2000));
-                    
                     // 2. Preenche credenciais
                     console.log('📝 Preenchendo credenciais...');
-                    await win.webContents.executeJavaScript(`
+                    await mainWindow.webContents.executeJavaScript(`
                         (function() {
                             const loginField = document.querySelector('#loginName');
                             const senhaField = document.querySelector('#loginSenha');
@@ -375,22 +421,18 @@ async function tryAutoLogin() {
                             }
                         })();
                     `);
-                    
                     await new Promise(r => setTimeout(r, 1000));
-                    
                     // 3. Clica em Entrar
                     console.log('📝 Clicando em Entrar...');
-                    await win.webContents.executeJavaScript(`
+                    await mainWindow.webContents.executeJavaScript(`
                         (function() {
-                            const btn = document.querySelector('input[value="Entrar"]') || 
-                                       document.querySelector('button[type="submit"]') ||
-                                       document.querySelector('input[type="submit"]');
+                            const btn = document.querySelector('input[value=\"Entrar\"]') || 
+                                       document.querySelector('button[type=\"submit\"]') ||
+                                       document.querySelector('input[type=\"submit\"]');
                             if (btn) btn.click();
                         })();
                     `);
-                    
                     console.log('⏳ Aguardando redirecionamento...');
-                    
                 } catch (err) {
                     console.log('❌ Erro no login:', err.message);
                 }
@@ -411,7 +453,7 @@ async function tryAutoLogin() {
                 await new Promise(r => setTimeout(r, 2000));
                 
                 // Clica no botão Registro Civil
-                await win.webContents.executeJavaScript(`
+                await mainWindow.webContents.executeJavaScript(`
                     (function() {
                         const allLinks = document.querySelectorAll('a[id*="clAcessar"]');
                         for (let link of allLinks) {
@@ -429,7 +471,7 @@ async function tryAutoLogin() {
                 await new Promise(r => setTimeout(r, 5000));
                 
                 // Verifica e abre dropdown
-                const resultado = await win.webContents.executeJavaScript(`
+                const resultado = await mainWindow.webContents.executeJavaScript(`
                     (function() {
                         const dialog = document.querySelector('.ui-dialog[aria-hidden="false"]');
                         const title = dialog ? dialog.querySelector('.ui-dialog-title') : null;
@@ -449,7 +491,7 @@ async function tryAutoLogin() {
                     await new Promise(r => setTimeout(r, 1500));
                     
                     // Seleciona o item
-                    const selecao = await win.webContents.executeJavaScript(`
+                    const selecao = await mainWindow.webContents.executeJavaScript(`
                         (function() {
                             const items = document.querySelectorAll('#formSetor\\\\:cbSetor_items li');
                             for (const item of items) {
@@ -469,7 +511,7 @@ async function tryAutoLogin() {
                     await new Promise(r => setTimeout(r, 2000));
                     
                     // Clica em Entrar
-                    await win.webContents.executeJavaScript(`
+                    await mainWindow.webContents.executeJavaScript(`
                         (function() {
                             const btn = document.querySelector('#formSetor\\\\:sim');
                             if (btn) {
@@ -486,13 +528,13 @@ async function tryAutoLogin() {
                 return;
             }
 
-            // Se está no Registro Civil, verifica se precisa selecionar cartório
+                // Se está no Registro Civil, verifica se precisa selecionar cartório
             if (url.includes('/registrocivil/') && !url.includes('acessonegado') && !url.includes('login') && !url.includes('consultaSolicitacaoExterna')) {
                 console.log('✅ Registro Civil! Verificando seleção de cartório...');
                 await new Promise(r => setTimeout(r, 2000));
                 
                 // Verifica se apareceu o painel de seleção de cartório
-                const needsCartorioSelection = await win.webContents.executeJavaScript(`
+                const needsCartorioSelection = await mainWindow.webContents.executeJavaScript(`
                     (function() {
                         // Procura pelo painel de seleção
                         const dialog = document.querySelector('.ui-dialog');
@@ -509,7 +551,7 @@ async function tryAutoLogin() {
                     console.log('🏢 Detectado painel de seleção de cartório!');
                     
                     // Clica no dropdown
-                    await win.webContents.executeJavaScript(`
+                    await mainWindow.webContents.executeJavaScript(`
                         (function() {
                             const label = document.querySelector('label[id*="cbSetor_label"]');
                             if (label) {
@@ -521,7 +563,7 @@ async function tryAutoLogin() {
                     await new Promise(r => setTimeout(r, 1000));
                     
                     // Seleciona o cartório "9º Ofício"
-                    await win.webContents.executeJavaScript(`
+                    await mainWindow.webContents.executeJavaScript(`
                         (function() {
                             const items = document.querySelectorAll('.ui-selectonemenu-item');
                             for (const item of items) {
@@ -537,7 +579,7 @@ async function tryAutoLogin() {
                     await new Promise(r => setTimeout(r, 1000));
                     
                     // Clica no botão Entrar
-                    await win.webContents.executeJavaScript(`
+                    await mainWindow.webContents.executeJavaScript(`
                         (function() {
                             const buttons = document.querySelectorAll('button');
                             for (const btn of buttons) {
@@ -558,7 +600,7 @@ async function tryAutoLogin() {
                 console.log('📋 Navegando para menu Maternidade...');
                 
                 // Abre dropdown Maternidade
-                await win.webContents.executeJavaScript(`
+                await mainWindow.webContents.executeJavaScript(`
                     (function() {
                         const maternidadeMenu = Array.from(document.querySelectorAll('span.ui-menuitem-text'))
                             .find(span => span.textContent.includes('Maternidade'));
@@ -575,7 +617,7 @@ async function tryAutoLogin() {
                 await new Promise(r => setTimeout(r, 1500));
                 
                 // Clica no link de Solicitação Externa
-                await win.webContents.executeJavaScript(`
+                await mainWindow.webContents.executeJavaScript(`
                     (function() {
                         const link = document.querySelector('a[href*="consultaSolicitacaoExterna"]');
                         if (link) {
@@ -592,13 +634,19 @@ async function tryAutoLogin() {
             if (url.includes('consultaSolicitacaoExterna')) {
                 console.log('✅ LOGIN COMPLETO!');
                 isLoggedIn = true;
+                loginComplete = true; // 🛑 DESATIVA AUTOMAÇÃO - USUÁRIO LIVRE!
                 showNotification('Monitor TJSE', '✅ Login realizado com sucesso!');
                 done(true);
                 return;
             }
+            } catch (err) {
+                console.log('❌ tryAutoLogin handler error:', err && err.message ? err.message : err);
+                done(false);
+                return;
+            }
         });
 
-        win.loadURL(LOGIN_URL);
+        mainWindow.loadURL(LOGIN_URL);
     });
 }
 
@@ -606,6 +654,13 @@ async function tryAutoLogin() {
 // LOOP PRINCIPAL
 // ========================================
 async function mainLoop() {
+    // 🛑 SE A JANELA PRINCIPAL ESTÁ VISÍVEL, NÃO INTERFERE!
+    // O usuário está usando, a verificação é feita em OUTRA janela invisível
+    if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
+        console.log('⏸️ Janela visível — usuário usando, pulando verificação completa.');
+        return; // Não faz nada, deixa o usuário trabalhar
+    }
+    
     const result = await checkNewRecords();
     
     if (result.success) {
@@ -629,9 +684,15 @@ async function mainLoop() {
         // Precisa fazer login
         updateTrayIcon('offline', '🔴 Sessão expirada - faça login');
         
-        // Se horário de trabalho, agenda retry
+        // 🛑 RESETA flag de login completo para permitir novo login
+        loginComplete = false;
+        
+        // Se horário de trabalho E janela NÃO está visível, agenda retry
         if (isWorkHours() && !loginRetryTimeout) {
-            scheduleAutoLoginRetry();
+            // Proteção adicional: não agenda se janela visível
+            if (!mainWindow || mainWindow.isDestroyed() || !mainWindow.isVisible()) {
+                scheduleAutoLoginRetry();
+            }
         }
     }
 }
@@ -644,6 +705,12 @@ function scheduleAutoLoginRetry() {
         loginRetryTimeout = null;
         
         if (!isLoggedIn && isWorkHours()) {
+            // 🛑 PROTEÇÃO: Se janela visível, NÃO tenta relogar de jeito nenhum
+            if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
+                console.log('⏸️ Janela visível — usuário usando, cancelando login.');
+                return; // NÃO reagenda, espera próximo mainLoop
+            }
+
             const success = await tryAutoLogin();
             if (success) {
                 // Login OK, verifica imediatamente
@@ -689,6 +756,23 @@ function createTrayMenu() {
         {
             label: '🔄 Verificar Agora',
             click: () => mainLoop()
+        },
+        {
+            label: '👁️ Abrir Maternidade (já logado)',
+            click: () => {
+                const win = new BrowserWindow({
+                    width: 1200,
+                    height: 800,
+                    show: true,
+                    webPreferences: {
+                        partition: 'persist:tjse-monitor',
+                        nodeIntegration: false,
+                        contextIsolation: true
+                    }
+                });
+                // URL da página já logada de maternidade
+                win.loadURL('https://www.tjse.jus.br/registrocivil/seguro/maternidade/solicitacaoExterna/consultaSolicitacaoExterna.tjse');
+            }
         },
         {
             label: '🌐 Abrir Site',
@@ -844,15 +928,17 @@ async function tryLoginVisible() {
         setupPopupHandler(win);
 
         win.webContents.on('did-finish-load', async () => {
-            const url = win.webContents.getURL();
-            
-            // Ignora páginas blank.tjse
-            if (url.includes('blank.tjse')) {
-                console.log('⏭️ [DEBUG] Ignorando blank.tjse');
-                return;
-            }
-            
-            console.log('📄 [DEBUG]', url);
+            try {
+                if (!win || win.isDestroyed()) return;
+                const url = win.webContents.getURL();
+
+                // Ignora páginas blank.tjse
+                if (url.includes('blank.tjse')) {
+                    console.log('⏭️ [DEBUG] Ignorando blank.tjse');
+                    return;
+                }
+
+                console.log('📄 [DEBUG]', url);
 
             if (url.includes('loginTJSE') && !loginAttempted) {
                 loginAttempted = true;
@@ -860,7 +946,7 @@ async function tryLoginVisible() {
 
                 try {
                     console.log('📝 [DEBUG] Clicando em "Login e senha"...');
-                    await win.webContents.executeJavaScript(`
+                    await safeExec(win, `
                         (function() {
                             const btn = document.querySelector('img[alt="Entrar com login e senha"]');
                             if (btn) { btn.click(); return 'OK'; }
@@ -871,7 +957,7 @@ async function tryLoginVisible() {
                     await new Promise(r => setTimeout(r, 2000));
                     
                     console.log('📝 [DEBUG] Preenchendo credenciais...');
-                    await win.webContents.executeJavaScript(`
+                    await safeExec(win, `
                         (function() {
                             const loginField = document.querySelector('#loginName');
                             const senhaField = document.querySelector('#loginSenha');
@@ -897,7 +983,7 @@ async function tryLoginVisible() {
                     await new Promise(r => setTimeout(r, 1000));
                     
                     console.log('📝 [DEBUG] Clicando em Entrar...');
-                    await win.webContents.executeJavaScript(`
+                    await safeExec(win, `
                         (function() {
                             const btn = document.querySelector('input[value="Entrar"]') || 
                                        document.querySelector('button[type="submit"]') ||
@@ -926,7 +1012,7 @@ async function tryLoginVisible() {
                 await new Promise(r => setTimeout(r, 2000));
                 
                 // Clica no botão Registro Civil - busca pelo texto exato no h2
-                const clickResult = await win.webContents.executeJavaScript(`
+                const clickResult = await safeExec(win, `
                     (function() {
                         const allLinks = document.querySelectorAll('a[id*="clAcessar"]');
                         for (let link of allLinks) {
@@ -946,7 +1032,7 @@ async function tryLoginVisible() {
                 await new Promise(r => setTimeout(r, 5000));
                 
                 // Verifica se o modal de seleção apareceu e preenche tudo via JS
-                const resultado = await win.webContents.executeJavaScript(`
+                const resultado = await safeExec(win, `
                     (function() {
                         const dialog = document.querySelector('.ui-dialog[aria-hidden="false"]');
                         const title = dialog ? dialog.querySelector('.ui-dialog-title') : null;
@@ -971,7 +1057,7 @@ async function tryLoginVisible() {
                     await new Promise(r => setTimeout(r, 1500));
                     
                     // Seleciona o item via JavaScript simulando clique real
-                    const selecao = await win.webContents.executeJavaScript(`
+                    const selecao = await safeExec(win, `
                         (function() {
                             // Procura o item na lista
                             const items = document.querySelectorAll('#formSetor\\\\:cbSetor_items li');
@@ -1006,7 +1092,7 @@ async function tryLoginVisible() {
                     
                     // Clica no botão Entrar
                     console.log('✅ [DEBUG] Clicando em Entrar...');
-                    const btnResult = await win.webContents.executeJavaScript(`
+                    const btnResult = await safeExec(win, `
                         (function() {
                             const btn = document.querySelector('#formSetor\\\\:sim');
                             if (btn) {
@@ -1031,7 +1117,7 @@ async function tryLoginVisible() {
                 await new Promise(r => setTimeout(r, 2000));
                 
                 // Tenta clicar no menu Maternidade e depois no submenu
-                const menuResult = await win.webContents.executeJavaScript(`
+                const menuResult = await safeExec(win, `
                     (function() {
                         // Procura o menu Maternidade
                         const maternidadeMenu = Array.from(document.querySelectorAll('span.ui-menuitem-text'))
@@ -1054,7 +1140,7 @@ async function tryLoginVisible() {
                 await new Promise(r => setTimeout(r, 1500));
                 
                 // Agora clica no link de Solicitação Externa
-                const linkResult = await win.webContents.executeJavaScript(`
+                const linkResult = await safeExec(win, `
                     (function() {
                         // Tenta encontrar o link direto
                         const link = document.querySelector('a[href*="consultaSolicitacaoExterna"]');
@@ -1077,6 +1163,10 @@ async function tryLoginVisible() {
                 isLoggedIn = true;
                 showNotification('Monitor TJSE', '✅ Login realizado!');
                 done(true);
+                return;
+            }
+            } catch (err) {
+                console.log('❌ tryLoginVisible handler error:', err && err.message ? err.message : err);
                 return;
             }
         });
@@ -1111,15 +1201,42 @@ app.whenReady().then(() => {
     tray = new Tray(getIcon('offline'));
     tray.setToolTip('Monitor Maternidade - Iniciando...');
     tray.setContextMenu(createTrayMenu());
-    
-    // Duplo clique abre site
+
+    // Duplo clique revela janela já logada
     tray.on('double-click', () => {
-        const { shell } = require('electron');
-        shell.openExternal(TARGET_URL);
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            const url = mainWindow.webContents.getURL();
+            if (!url || url === 'about:blank' || url.includes('acessonegado')) {
+                mainWindow.loadURL('https://www.tjse.jus.br/registrocivil/seguro/maternidade/solicitacaoExterna/consultaSolicitacaoExterna.tjse');
+            } else {
+                mainWindow.reload(); // Força reload para evitar tela branca
+            }
+            mainWindow.show();
+            mainWindow.focus();
+        } else {
+            tryAutoLogin().then(() => {
+                if (mainWindow) {
+                    mainWindow.show();
+                    mainWindow.focus();
+                }
+            });
+        }
     });
 
     // Primeira verificação
     mainLoop();
+    
+    // Tenta fazer login automaticamente no início
+    if (isWorkHours()) {
+        setTimeout(() => {
+            tryAutoLogin().then((success) => {
+                if (success) {
+                    console.log('✅ Login automático inicial bem-sucedido!');
+                    mainLoop();
+                }
+            });
+        }, 3000);
+    }
     
     // Loop de verificação a cada 5 min
     checkInterval = setInterval(mainLoop, CHECK_INTERVAL_MS);
