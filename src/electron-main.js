@@ -70,19 +70,6 @@ function loadCredentials() {
     return null;
 }
 
-// Safe execute on a BrowserWindow's webContents
-async function safeExec(browserWin, code) {
-    try {
-        if (!browserWin) return null;
-        if (typeof browserWin.isDestroyed === 'function' && browserWin.isDestroyed()) return null;
-        if (!browserWin.webContents) return null;
-        return await browserWin.webContents.executeJavaScript(code);
-    } catch (err) {
-        console.log('❌ safeExec error:', err.message);
-        return null;
-    }
-}
-
 // ========================================
 // ÍCONES
 // ========================================
@@ -207,6 +194,7 @@ async function checkNewRecords() {
                     
                     console.log(`✅ Encontrados: ${count} SOLICITADO(s)`);
                     isLoggedIn = true;
+                    loginComplete = true; // Marca como logado para não interferir
                     done({ success: true, count, needsLogin: false });
                 } catch (err) {
                     console.log('❌ Erro ao contar:', err.message);
@@ -635,6 +623,10 @@ async function tryAutoLogin() {
                 console.log('✅ LOGIN COMPLETO!');
                 isLoggedIn = true;
                 loginComplete = true; // 🛑 DESATIVA AUTOMAÇÃO - USUÁRIO LIVRE!
+                
+                // ✅ ATUALIZA ÍCONE PARA VERDE (logado com sucesso)
+                updateTrayIcon('ok', '✅ Logado - Nenhuma solicitação pendente');
+                
                 showNotification('Monitor TJSE', '✅ Login realizado com sucesso!');
                 done(true);
                 return;
@@ -654,11 +646,12 @@ async function tryAutoLogin() {
 // LOOP PRINCIPAL
 // ========================================
 async function mainLoop() {
-    // 🛑 SE A JANELA PRINCIPAL ESTÁ VISÍVEL, NÃO INTERFERE!
-    // O usuário está usando, a verificação é feita em OUTRA janela invisível
-    if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
-        console.log('⏸️ Janela visível — usuário usando, pulando verificação completa.');
-        return; // Não faz nada, deixa o usuário trabalhar
+    // Se janela visível E login completo, não precisa verificar (usuário usando)
+    // Mas ainda assim atualiza ícone se já está logado
+    if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible() && loginComplete) {
+        console.log('⏸️ Janela visível — usuário usando, mantendo ícone verde.');
+        updateTrayIcon('ok', '✅ Logado - Usando agora');
+        return;
     }
     
     const result = await checkNewRecords();
@@ -739,15 +732,6 @@ function createTrayMenu() {
             label: '🔑 Fazer Login (background)',
             click: async () => {
                 const success = await tryAutoLogin();
-                if (success) {
-                    await mainLoop();
-                }
-            }
-        },
-        {
-            label: '👁️ Ver Login (debug)',
-            click: async () => {
-                const success = await tryLoginVisible();
                 if (success) {
                     await mainLoop();
                 }
@@ -873,305 +857,6 @@ function promptCredentials() {
         saveCredentials(data.login, data.senha);
         console.log('✅ Credenciais salvas:', data.login);
         tray.setContextMenu(createTrayMenu());
-    });
-}
-
-// ========================================
-// LOGIN VISÍVEL (PARA DEBUG)
-// ========================================
-async function tryLoginVisible() {
-    const creds = loadCredentials();
-    if (!creds) {
-        console.log('❌ Configure as credenciais primeiro');
-        return false;
-    }
-
-    console.log('🔐 Login VISÍVEL para debug...');
-
-    return new Promise((resolve) => {
-        const win = new BrowserWindow({
-            width: 1000,
-            height: 700,
-            show: true,
-            title: 'TJSE Login - Debug',
-            webPreferences: {
-                partition: 'persist:tjse-monitor',
-                nodeIntegration: false,
-                contextIsolation: true
-            }
-        });
-
-        let resolved = false;
-        let loginAttempted = false;
-        let currentWin = win; // Rastreia a janela ativa
-        
-        const done = (success) => {
-            if (!resolved) {
-                resolved = true;
-                resolve(success);
-                // NÃO fecha a janela para debug
-            }
-        };
-
-        // Intercepta popups e navega na mesma janela
-        const setupPopupHandler = (browserWin) => {
-            browserWin.webContents.setWindowOpenHandler(({ url }) => {
-                console.log('🔗 [DEBUG] Popup interceptado:', url);
-                // Ignora blank.tjse e navega diretamente
-                if (!url.includes('blank.tjse')) {
-                    browserWin.loadURL(url);
-                }
-                return { action: 'deny' };
-            });
-        };
-
-        setupPopupHandler(win);
-
-        win.webContents.on('did-finish-load', async () => {
-            try {
-                if (!win || win.isDestroyed()) return;
-                const url = win.webContents.getURL();
-
-                // Ignora páginas blank.tjse
-                if (url.includes('blank.tjse')) {
-                    console.log('⏭️ [DEBUG] Ignorando blank.tjse');
-                    return;
-                }
-
-                console.log('📄 [DEBUG]', url);
-
-            if (url.includes('loginTJSE') && !loginAttempted) {
-                loginAttempted = true;
-                await new Promise(r => setTimeout(r, 1500));
-
-                try {
-                    console.log('📝 [DEBUG] Clicando em "Login e senha"...');
-                    await safeExec(win, `
-                        (function() {
-                            const btn = document.querySelector('img[alt="Entrar com login e senha"]');
-                            if (btn) { btn.click(); return 'OK'; }
-                            return 'Botão não encontrado';
-                        })();
-                    `).then(r => console.log('   Resultado:', r));
-                    
-                    await new Promise(r => setTimeout(r, 2000));
-                    
-                    console.log('📝 [DEBUG] Preenchendo credenciais...');
-                    await safeExec(win, `
-                        (function() {
-                            const loginField = document.querySelector('#loginName');
-                            const senhaField = document.querySelector('#loginSenha');
-                            let result = [];
-                            if (loginField) {
-                                loginField.value = '${creds.login}';
-                                loginField.dispatchEvent(new Event('input', { bubbles: true }));
-                                result.push('login OK');
-                            } else {
-                                result.push('login NÃO ENCONTRADO');
-                            }
-                            if (senhaField) {
-                                senhaField.value = '${creds.senha}';
-                                senhaField.dispatchEvent(new Event('input', { bubbles: true }));
-                                result.push('senha OK');
-                            } else {
-                                result.push('senha NÃO ENCONTRADO');
-                            }
-                            return result.join(', ');
-                        })();
-                    `).then(r => console.log('   Resultado:', r));
-                    
-                    await new Promise(r => setTimeout(r, 1000));
-                    
-                    console.log('📝 [DEBUG] Clicando em Entrar...');
-                    await safeExec(win, `
-                        (function() {
-                            const btn = document.querySelector('input[value="Entrar"]') || 
-                                       document.querySelector('button[type="submit"]') ||
-                                       document.querySelector('input[type="submit"]');
-                            if (btn) { btn.click(); return 'Clicou em: ' + btn.tagName; }
-                            return 'Botão Entrar não encontrado';
-                        })();
-                    `).then(r => console.log('   Resultado:', r));
-                    
-                } catch (err) {
-                    console.log('❌ [DEBUG] Erro:', err.message);
-                }
-                return;
-            }
-
-            if ((url.includes('portalExterno') || url.includes('portal') || url.includes('sistemasTJSE')) && !url.includes('login')) {
-                // Evita loop - só processa uma vez
-                if (win.processouPortal) {
-                    console.log('⏭️ [DEBUG] Portal já processado, aguardando...');
-                    return;
-                }
-                win.processouPortal = true;
-                
-                console.log('✅ [DEBUG] Portal/Sistemas! Procurando botão Registro Civil...');
-                isLoggedIn = true;
-                await new Promise(r => setTimeout(r, 2000));
-                
-                // Clica no botão Registro Civil - busca pelo texto exato no h2
-                const clickResult = await safeExec(win, `
-                    (function() {
-                        const allLinks = document.querySelectorAll('a[id*="clAcessar"]');
-                        for (let link of allLinks) {
-                            const h2 = link.querySelector('h2');
-                            if (h2 && h2.textContent.trim() === 'Registro Civil') {
-                                link.click();
-                                return 'Clicou em Registro Civil (id: ' + link.id + ')';
-                            }
-                        }
-                        return 'Botão Registro Civil não encontrado';
-                    })();
-                `);
-                console.log('   ', clickResult);
-                
-                // Aguarda modal aparecer (5 segundos)
-                console.log('⏳ [DEBUG] Aguardando modal de seleção de cartório (5s)...');
-                await new Promise(r => setTimeout(r, 5000));
-                
-                // Verifica se o modal de seleção apareceu e preenche tudo via JS
-                const resultado = await safeExec(win, `
-                    (function() {
-                        const dialog = document.querySelector('.ui-dialog[aria-hidden="false"]');
-                        const title = dialog ? dialog.querySelector('.ui-dialog-title') : null;
-                        if (!title || !title.textContent.includes('Selecionar')) {
-                            return 'Modal não encontrado';
-                        }
-                        
-                        // Encontra o dropdown label e clica para abrir
-                        const dropdownLabel = document.querySelector('#formSetor\\\\:cbSetor_label');
-                        if (dropdownLabel) {
-                            dropdownLabel.click();
-                        }
-                        return 'Modal encontrado, abrindo dropdown...';
-                    })();
-                `);
-                console.log('   ', resultado);
-                
-                if (resultado.includes('Modal encontrado')) {
-                    console.log('🏢 [DEBUG] Modal detectado! Selecionando cartório via JS...');
-                    
-                    // Aguarda dropdown abrir
-                    await new Promise(r => setTimeout(r, 1500));
-                    
-                    // Seleciona o item via JavaScript simulando clique real
-                    const selecao = await safeExec(win, `
-                        (function() {
-                            // Procura o item na lista
-                            const items = document.querySelectorAll('#formSetor\\\\:cbSetor_items li');
-                            for (const item of items) {
-                                if (item.textContent.includes('9º Ofício')) {
-                                    // Simula eventos de mouse completos
-                                    item.dispatchEvent(new MouseEvent('mouseover', { bubbles: true, cancelable: true }));
-                                    item.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true }));
-                                    item.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true }));
-                                    item.click();
-                                    return 'Selecionou: ' + item.textContent.substring(0, 50);
-                                }
-                            }
-                            
-                            // Tenta pelo ID direto
-                            const item5 = document.querySelector('#formSetor\\\\:cbSetor_5');
-                            if (item5) {
-                                item5.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
-                                item5.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-                                item5.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
-                                item5.click();
-                                return 'Selecionou via ID: ' + item5.textContent.substring(0, 50);
-                            }
-                            
-                            return 'Item 9º Ofício não encontrado. Items: ' + items.length;
-                        })();
-                    `);
-                    console.log('   ', selecao);
-                    
-                    // Aguarda seleção ser processada
-                    await new Promise(r => setTimeout(r, 2000));
-                    
-                    // Clica no botão Entrar
-                    console.log('✅ [DEBUG] Clicando em Entrar...');
-                    const btnResult = await safeExec(win, `
-                        (function() {
-                            const btn = document.querySelector('#formSetor\\\\:sim');
-                            if (btn) {
-                                btn.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-                                btn.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
-                                btn.click();
-                                return 'Clicou em Entrar';
-                            }
-                            return 'Botão Entrar não encontrado';
-                        })();
-                    `);
-                    console.log('   ', btnResult);
-                } else {
-                    console.log('ℹ️ [DEBUG] Modal não apareceu, navegação direta...');
-                }
-                return;
-            }
-
-            // Se está no Registro Civil, clica no menu Maternidade
-            if (url.includes('/registrocivil/') && !url.includes('acessonegado') && !url.includes('login') && !url.includes('consultaSolicitacaoExterna')) {
-                console.log('✅ [DEBUG] Registro Civil! Navegando para consultas via menu...');
-                await new Promise(r => setTimeout(r, 2000));
-                
-                // Tenta clicar no menu Maternidade e depois no submenu
-                const menuResult = await safeExec(win, `
-                    (function() {
-                        // Procura o menu Maternidade
-                        const maternidadeMenu = Array.from(document.querySelectorAll('span.ui-menuitem-text'))
-                            .find(span => span.textContent.includes('Maternidade'));
-                        
-                        if (maternidadeMenu) {
-                            // Dispara evento de mouse para abrir o dropdown
-                            const parentLi = maternidadeMenu.closest('li');
-                            if (parentLi) {
-                                parentLi.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true }));
-                                parentLi.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
-                            }
-                            return 'Menu Maternidade encontrado, abrindo dropdown...';
-                        }
-                        return 'Menu Maternidade não encontrado';
-                    })();
-                `);
-                console.log('   ', menuResult);
-                
-                await new Promise(r => setTimeout(r, 1500));
-                
-                // Agora clica no link de Solicitação Externa
-                const linkResult = await safeExec(win, `
-                    (function() {
-                        // Tenta encontrar o link direto
-                        const link = document.querySelector('a[href*="consultaSolicitacaoExterna"]');
-                        if (link) {
-                            link.click();
-                            return 'Clicou em Solicitação Externa';
-                        }
-                        
-                        // Se não achou, tenta navegar direto
-                        window.location.href = '/registrocivil/seguro/maternidade/solicitacaoExterna/consultaSolicitacaoExterna.tjse';
-                        return 'Navegando direto para URL';
-                    })();
-                `);
-                console.log('   ', linkResult);
-                return;
-            }
-
-            if (url.includes('consultaSolicitacaoExterna')) {
-                console.log('✅ [DEBUG] LOGIN COMPLETO!');
-                isLoggedIn = true;
-                showNotification('Monitor TJSE', '✅ Login realizado!');
-                done(true);
-                return;
-            }
-            } catch (err) {
-                console.log('❌ tryLoginVisible handler error:', err && err.message ? err.message : err);
-                return;
-            }
-        });
-
-        win.loadURL(LOGIN_URL);
     });
 }
 
