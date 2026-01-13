@@ -96,9 +96,7 @@ function encrypt(text) {
 
 function decrypt(text) {
     try {
-    const safeWrite = () => true;
-    process.stdout.write = safeWrite;
-    process.stderr.write = safeWrite;        const parts = text.split(':');
+            const parts = text.split(':');
         const iv = Buffer.from(parts[0], 'hex');
         const encrypted = Buffer.from(parts[1], 'hex');
         const decipher = crypto.createDecipheriv('aes-256-cbc', Buffer.from(SECRET_KEY), iv);
@@ -116,9 +114,7 @@ function saveCredentials(login, senha) {
 
 function loadCredentials() {
     try {
-    const safeWrite = () => true;
-    process.stdout.write = safeWrite;
-    process.stderr.write = safeWrite;        const file = getCredentialsFile();
+            const file = getCredentialsFile();
         if (fs.existsSync(file)) {
             const decrypted = decrypt(fs.readFileSync(file, 'utf8'));
             return decrypted ? JSON.parse(decrypted) : null;
@@ -134,24 +130,30 @@ function getIcon(type) {
     const icons = {
         'ok': 'maternidade-ok.ico',
         'alert': 'maternidade-nova-solicitacao.ico',
-        'offline': 'maternidade-offline.ico'
+        'offline': 'maternidade-offline.ico',
+        'loading': 'maternidade-ok.ico'
     };
     const iconPath = path.join(ICONS_DIR, icons[type] || icons['offline']);
     return fs.existsSync(iconPath) ? nativeImage.createFromPath(iconPath) : null;
+}
+
+function toAscii(text) {
+    return (text || '').replace(/[^\x20-\x7E]/g, '');
 }
 
 function updateTray(type, tooltip) {
     if (!tray) return;
     const icon = getIcon(type);
     if (icon) tray.setImage(icon);
-    tray.setToolTip(tooltip || 'Monitor Maternidade TJSE');
-    console.log(`ðŸ”” Tray: ${type} - ${tooltip}`);
+    tray.setToolTip(toAscii(tooltip || 'Monitor Maternidade TJSE'));
+    console.log('Tray: ' + type + ' - ' + tooltip);
 }
 
 function notify(title, body) {
-    console.log(`ðŸ“¢ NotificaÃ§Ã£o: ${title} - ${body}`);
-    new Notification({ title, body }).show();
+    console.log('Notificacao: ' + title + ' - ' + body);
+    new Notification({ title: toAscii(title), body: toAscii(body) }).show();
 }
+
 
 // ========================================
 // AÃ‡ÃƒO: quando houver novo SOLICITADO, captura nome e clica no link de AÃ§Ãµes
@@ -163,9 +165,7 @@ async function handleNewSolicitacaoAndClick() {
     function downloadWithCookies(fileUrl, destPath, cookieHeader, userAgent, referer, redirectsLeft = 5) {
         return new Promise((resolve, reject) => {
             try {
-    const safeWrite = () => true;
-    process.stdout.write = safeWrite;
-    process.stderr.write = safeWrite;                const u = new URL(fileUrl);
+                    const u = new URL(fileUrl);
                 const opts = {
                     protocol: u.protocol,
                     hostname: u.hostname,
@@ -198,9 +198,7 @@ async function handleNewSolicitacaoAndClick() {
     }
 
     try {
-    const safeWrite = () => true;
-    process.stdout.write = safeWrite;
-    process.stderr.write = safeWrite;        // Abrir janela oculta com mesma sessÃ£o
+            // Abrir janela oculta com mesma sessÃ£o
         const win = new BrowserWindow({
             width: 1200,
             height: 800,
@@ -220,9 +218,7 @@ async function handleNewSolicitacaoAndClick() {
             const out = [];
             for (const tr of rows) {
                 try {
-    const safeWrite = () => true;
-    process.stdout.write = safeWrite;
-    process.stderr.write = safeWrite;                    const tds = tr.querySelectorAll('td');
+                        const tds = tr.querySelectorAll('td');
                     if (!tds || tds.length < 6) continue;
                     const nome = (tds[1].textContent || '').trim();
                     const situacaoSpan = tds[5].querySelector('span.ui-message-warn, span.ui-message-info, span.ui-message-error');
@@ -301,9 +297,7 @@ async function handleNewSolicitacaoAndClick() {
             // Evita reprocessar se os PDFs ja existem na pasta compartilhada
             let solicitacaoId = null;
             try {
-    const safeWrite = () => true;
-    process.stdout.write = safeWrite;
-    process.stderr.write = safeWrite;                const u = new URL(href);
+                    const u = new URL(href);
                 solicitacaoId = u.searchParams.get('idSolicitacao');
             } catch {}
             const docPath = path.join(childDir, `DOCUMENTOS - ${sanitizedName}.pdf`);
@@ -342,9 +336,7 @@ async function handleNewSolicitacaoAndClick() {
 
             for (const t of tasks) {
                 try {
-    const safeWrite = () => true;
-    process.stdout.write = safeWrite;
-    process.stderr.write = safeWrite;                    await downloadWithCookies(t.url, t.dest, cookieHeader, userAgent, href);
+                        await downloadWithCookies(t.url, t.dest, cookieHeader, userAgent, href);
                     console.log(`âœ… ${t.label} baixado:`, t.dest);
                     writeStatusLog({ event: 'pdf_downloaded', tipo: t.label, nome: sanitizedName, pdfUrl: t.url, dest: t.dest });
                 } catch (e) {
@@ -358,9 +350,7 @@ async function handleNewSolicitacaoAndClick() {
             }
             // ApÃ³s completar ciclo de download, voltar ao loop principal normalmente
             try {
-    const safeWrite = () => true;
-    process.stdout.write = safeWrite;
-    process.stderr.write = safeWrite;                setTimeout(() => { try { loopPrincipal(); } catch (e) {} }, 2000);
+                    setTimeout(() => { try { loopPrincipal(); } catch (e) {} }, 2000);
             } catch (e) { }
         }
 
@@ -382,9 +372,7 @@ async function aguardarElemento(win, selector, timeout = 10000) {
     const inicio = Date.now();
     while (Date.now() - inicio < timeout) {
         try {
-    const safeWrite = () => true;
-    process.stdout.write = safeWrite;
-    process.stderr.write = safeWrite;            const existe = await win.webContents.executeJavaScript(`
+                const existe = await win.webContents.executeJavaScript(`
                 !!document.querySelector('${selector.replace(/'/g, "\\'")}')
             `);
             if (existe) return true;
@@ -399,9 +387,7 @@ async function aguardarElemento(win, selector, timeout = 10000) {
 // ========================================
 function writeStatusLog(payload) {
     try {
-    const safeWrite = () => true;
-    process.stdout.write = safeWrite;
-    process.stderr.write = safeWrite;        const logsDir = getLogsDir();
+            const logsDir = getLogsDir();
         if (!fs.existsSync(logsDir)) fs.mkdirSync(logsDir, { recursive: true });
         const file = path.join(logsDir, `status-${new Date().toISOString().slice(0,10)}.log`);
         const line = `${new Date().toISOString()} ${JSON.stringify(payload)}\n`;
@@ -464,9 +450,7 @@ async function verificarSolicitados() {
                 await new Promise(r => setTimeout(r, 3000));
                 
                 try {
-    const safeWrite = () => true;
-    process.stdout.write = safeWrite;
-    process.stderr.write = safeWrite;                    const count = await win.webContents.executeJavaScript(`
+                        const count = await win.webContents.executeJavaScript(`
                         (function() {
                             let c = 0;
                             // Busca em todas as cÃ©lulas e spans da tabela
@@ -557,10 +541,7 @@ async function fazerLogin() {
         }, 120000);
 
         // Oculta ao fechar (nÃ£o destrÃ³i)
-        mainWindow.on('close', (e) => {
-            e.preventDefault();
-            mainWindow.hide();
-        });
+        mainWindow.on('close', () => { app.quit(); });
 
         // Detecta foco do usuÃ¡rio
         mainWindow.on('focus', () => {
@@ -579,9 +560,7 @@ async function fazerLogin() {
             if (done) return;
             
             try {
-    const safeWrite = () => true;
-    process.stdout.write = safeWrite;
-    process.stderr.write = safeWrite;                const url = mainWindow.webContents.getURL();
+                    const url = mainWindow.webContents.getURL();
                 if (url.includes('blank.tjse')) return;
                 
                 console.log(`ðŸ“„ [${etapa}]`, url);
@@ -754,36 +733,36 @@ function criarMenu() {
     const creds = loadCredentials();
     
     return Menu.buildFromTemplate([
-        { label: 'ðŸ¥ Monitor Maternidade TJSE', enabled: false },
+        { label: 'Monitor Maternidade TJSE', enabled: false },
         { type: 'separator' },
         {
-            label: `ðŸ“ Pasta destino: ${getDownloadBase()}`,
+            label: 'Pasta destino: ' + getDownloadBase(),
             enabled: false
         },
         {
-            label: 'ðŸ“‚ Escolher pasta de destino',
+            label: 'Escolher pasta de destino',
             click: async () => {
                 try {
-    const safeWrite = () => true;
-    process.stdout.write = safeWrite;
-    process.stderr.write = safeWrite;                    const res = await dialog.showOpenDialog({ properties: ['openDirectory'] });
+                        const res = await dialog.showOpenDialog({ properties: ['openDirectory'] });
                     if (!res.canceled && res.filePaths && res.filePaths[0]) {
                         setDownloadBase(res.filePaths[0]);
                         tray.setContextMenu(criarMenu());
+
+
                         notify('Monitor TJSE', 'Pasta destino atualizada');
                     }
                 } catch (e) { console.warn('Erro ao escolher pasta:', e.message); }
             }
         },
         {
-            label: 'ðŸ”‘ Fazer Login',
+            label: 'Fazer Login',
             click: async () => {
                 await fazerLogin();
                 await loopPrincipal();
             }
         },
         {
-            label: 'ðŸ”„ Verificar Agora',
+            label: 'Verificar Agora',
             click: () => {
                 lastCount = -1;
                 loopPrincipal();
@@ -794,16 +773,14 @@ function criarMenu() {
             click: async () => {
                 lastCount = -1;
                 try {
-    const safeWrite = () => true;
-    process.stdout.write = safeWrite;
-    process.stderr.write = safeWrite;                    await handleNewSolicitacaoAndClick();
+                        await handleNewSolicitacaoAndClick();
                 } catch (e) {
                     console.warn('Erro ao forcar download agora:', e.message);
                 }
             }
         },
         {
-            label: 'ðŸ”§ Toggle DevTools (F12)',
+            label: 'Toggle DevTools (F12)',
             accelerator: 'F12',
             click: (menuItem, browserWindow) => {
                 (async () => {
@@ -823,9 +800,7 @@ function criarMenu() {
                         await win.loadURL(TARGET_URL);
                     }
                     try {
-    const safeWrite = () => true;
-    process.stdout.write = safeWrite;
-    process.stderr.write = safeWrite;                        if (!win.isVisible()) win.show();
+                            if (!win.isVisible()) win.show();
                         win.focus();
                         win.webContents.toggleDevTools();
                     } catch (e) {
@@ -835,7 +810,7 @@ function criarMenu() {
             }
         },
         {
-            label: 'ðŸ‘ï¸ Abrir Maternidade',
+            label: 'Abrir Maternidade',
             click: async () => {
                 lastUserFocus = Date.now();
 
@@ -875,11 +850,11 @@ function criarMenu() {
         },
         { type: 'separator' },
         {
-            label: creds ? `âš™ï¸ ${creds.login}` : 'âš™ï¸ Configurar Login',
+            label: creds ? ('Login: ' + creds.login) : 'Configurar Login',
             click: () => abrirConfigCredenciais()
         },
         { type: 'separator' },
-        { label: 'âŒ Sair', click: () => app.quit() }
+        { label: 'Sair', click: () => app.quit() }
     ]);
 }
 
@@ -956,6 +931,8 @@ function salvar() {
         saveCredentials(data.login, data.senha);
         console.log('âœ… Credenciais salvas:', data.login);
         tray.setContextMenu(criarMenu());
+
+    
     });
 }
 
@@ -971,9 +948,7 @@ app.whenReady().then(() => {
     }
     app.on('second-instance', () => {
         try {
-    const safeWrite = () => true;
-    process.stdout.write = safeWrite;
-    process.stderr.write = safeWrite;            if (mainWindow && !mainWindow.isDestroyed()) {
+                if (mainWindow && !mainWindow.isDestroyed()) {
                 if (!mainWindow.isVisible()) mainWindow.show();
                 mainWindow.focus();
             }
@@ -982,15 +957,18 @@ app.whenReady().then(() => {
     const creds = loadCredentials();
     
     console.log('\nâ•”â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•—');
-    console.log('â•‘  ðŸ¥ Monitor Maternidade TJSE - SIMPLIFICADO â•‘');
+    console.log('Monitor Maternidade TJSE - SIMPLIFICADO');
     console.log('â•šâ•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•');
     console.log(`â”œâ”€ VerificaÃ§Ã£o: a cada 5 minutos`);
     console.log(`â”œâ”€ Login: ${creds ? creds.login : '(nÃ£o configurado)'}`);
 
     // Cria tray
-    tray = new Tray(getIcon('offline'));
-    tray.setToolTip('Monitor Maternidade - Iniciando...');
+    tray = new Tray(getIcon('loading'));
+    tray.setToolTip('Carregando...');
     tray.setContextMenu(criarMenu());
+    updateTray('loading', 'Carregando...');
+
+    
 
     // Duplo clique abre a janela (prioriza Electron)
     tray.on('double-click', async () => {
@@ -1027,9 +1005,7 @@ app.whenReady().then(() => {
 
     // Registrar globalShortcut F12 para abrir DevTools (quando possÃ­vel)
     try {
-    const safeWrite = () => true;
-    process.stdout.write = safeWrite;
-    process.stderr.write = safeWrite;        globalShortcut.register('F12', async () => {
+            globalShortcut.register('F12', async () => {
             let win = BrowserWindow.getFocusedWindow() || mainWindow;
             if (!win || win.isDestroyed()) {
                 win = new BrowserWindow({
@@ -1045,9 +1021,7 @@ app.whenReady().then(() => {
                 await win.loadURL(TARGET_URL);
             }
             try {
-    const safeWrite = () => true;
-    process.stdout.write = safeWrite;
-    process.stderr.write = safeWrite;                if (!win.isVisible()) win.show();
+                    if (!win.isVisible()) win.show();
                 win.focus();
                 win.webContents.toggleDevTools();
             } catch (e) {
@@ -1067,11 +1041,24 @@ app.whenReady().then(() => {
     checkInterval = setInterval(loopPrincipal, CHECK_INTERVAL_MS);
 });
 
-app.on('window-all-closed', (e) => e.preventDefault());
+app.on('window-all-closed', () => app.quit());
 
 app.on('will-quit', () => {
     try { globalShortcut.unregisterAll(); } catch {}
 });
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
